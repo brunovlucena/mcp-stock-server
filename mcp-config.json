@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "stock-server": {
+      "command": "node",
+      "args": ["/Users/brunovlucena/workspace/mcp-stock-server/dist/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

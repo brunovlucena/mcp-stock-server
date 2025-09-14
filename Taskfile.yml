@@ -1,0 +1,233 @@
+version: '3'
+
+vars:
+  IMAGE_NAME: mcp-stock-server
+  TAG: latest
+  DEV_TAG: dev
+  PORT: 3000
+  CONTAINER_NAME: mcp-stock-server
+  DEV_CONTAINER_NAME: mcp-stock-dev
+
+tasks:
+  help:
+    desc: "Show help"
+    cmds:
+      - task --list
+
+  install:
+    desc: "Install dependencies"
+    cmds:
+      - echo "Installing dependencies..."
+      - npm install
+
+  setup:
+    desc: "Setup project"
+    cmds:
+      - task: install
+      - |
+        if [ ! -f .env ]; then
+          echo "Creating .env file..."
+          cp env.example .env
+          echo "Edit .env with your API keys"
+        fi
+      - echo "Project configured!"
+
+  build:
+    desc: "Build project"
+    cmds:
+      - echo "Building project..."
+      - npm run build
+
+  clean:
+    desc: "Clean build files"
+    cmds:
+      - echo "Cleaning build files..."
+      - rm -rf dist/
+      - echo "Clean completed!"
+
+  start:
+    desc: "Start server (production)"
+    deps: [build]
+    cmds:
+      - echo "Starting server..."
+      - npm start
+
+  dev:
+    desc: "Start server (development)"
+    cmds:
+      - echo "Starting development server..."
+      - npm run dev
+
+  watch:
+    desc: "Start server with watch mode"
+    cmds:
+      - echo "Starting with watch mode..."
+      - npm run watch
+
+  docker:build:
+    desc: "Build Docker image"
+    cmds:
+      - echo "Building Docker image..."
+      - docker build -t {{.IMAGE_NAME}}:{{.TAG}} -t {{.IMAGE_NAME}}:latest -f Dockerfile .
+
+  docker:build-dev:
+    desc: "Build Docker dev image"
+    cmds:
+      - echo "Building Docker dev image..."
+      - docker build -t {{.IMAGE_NAME}}:{{.DEV_TAG}} -f Dockerfile.dev .
+
+  docker:run:
+    desc: "Run Docker container"
+    deps: [docker:build]
+    cmds:
+      - echo "Running Docker container..."
+      - docker stop {{.CONTAINER_NAME}} 2>/dev/null || true
+      - docker rm {{.CONTAINER_NAME}} 2>/dev/null || true
+      - docker run -d --name {{.CONTAINER_NAME}} --restart unless-stopped -p {{.PORT}}:{{.PORT}} -e NODE_ENV=production -e MCP_SERVER_NAME=stock-server -e MCP_SERVER_VERSION=1.0.0 -e PORT={{.PORT}} -e LOG_LEVEL=info -v "$(pwd)/logs:/app/logs" -v "$(pwd)/data:/app/data" {{.IMAGE_NAME}}:{{.TAG}}
+      - echo "Container running: {{.CONTAINER_NAME}}"
+
+  docker:run-dev:
+    desc: "Run Docker dev container"
+    deps: [docker:build-dev]
+    cmds:
+      - echo "Running dev container..."
+      - docker stop {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
+      - docker rm {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
+      - docker run -d --name {{.DEV_CONTAINER_NAME}} -p 3001:{{.PORT}} -e NODE_ENV=development -e MCP_SERVER_NAME=stock-server-dev -e MCP_SERVER_VERSION=1.0.0-dev -e PORT={{.PORT}} -e LOG_LEVEL=debug -v "$(pwd):/app" -v "/app/node_modules" {{.IMAGE_NAME}}:{{.DEV_TAG}}
+      - echo "Dev container running: {{.DEV_CONTAINER_NAME}}"
+
+  docker:stop:
+    desc: "Stop Docker containers"
+    cmds:
+      - echo "Stopping containers..."
+      - docker stop {{.CONTAINER_NAME}} {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
+      - docker rm {{.CONTAINER_NAME}} {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
+      - echo "Containers stopped"
+
+  docker:logs:
+    desc: "Show Docker logs"
+    cmds:
+      - echo "Showing logs..."
+      - |
+        if docker ps -q -f name={{.CONTAINER_NAME}} | grep -q .; then
+          docker logs -f {{.CONTAINER_NAME}}
+        elif docker ps -q -f name={{.DEV_CONTAINER_NAME}} | grep -q .; then
+          docker logs -f {{.DEV_CONTAINER_NAME}}
+        else
+          echo "No container running"
+          exit 1
+        fi
+
+  docker:clean:
+    desc: "Clean Docker images"
+    cmds:
+      - echo "Cleaning Docker..."
+      - docker stop {{.CONTAINER_NAME}} {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
+      - docker rm {{.CONTAINER_NAME}} {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
+      - docker rmi {{.IMAGE_NAME}}:{{.TAG}} {{.IMAGE_NAME}}:{{.DEV_TAG}} 2>/dev/null || true
+      - docker system prune -f
+      - echo "Docker cleaned!"
+
+  compose:up:
+    desc: "Start with docker-compose"
+    cmds:
+      - echo "Starting with docker-compose..."
+      - docker-compose up -d
+
+  compose:down:
+    desc: "Stop with docker-compose"
+    cmds:
+      - echo "Stopping with docker-compose..."
+      - docker-compose down
+
+  compose:logs:
+    desc: "Show docker-compose logs"
+    cmds:
+      - echo "Showing docker-compose logs..."
+      - docker-compose logs -f
+
+  compose:dev:
+    desc: "Start dev with docker-compose"
+    cmds:
+      - echo "Starting dev mode..."
+      - docker-compose --profile dev up -d
+
+  test:
+    desc: "Run tests"
+    deps: [build]
+    cmds:
+      - echo "Running tests..."
+      - node examples/test-server.js
+
+  test:quote:
+    desc: "Test stock quote"
+    deps: [build]
+    cmds:
+      - echo "Testing quote..."
+      - echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_stock_quote","arguments":{"symbol":"AAPL"}}}}' | node dist/index.js
+
+  test:search:
+    desc: "Test stock search"
+    deps: [build]
+    cmds:
+      - echo "Testing search..."
+      - echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_stocks","arguments":{"query":"Apple","limit":3}}}}' | node dist/index.js
+
+  lint:
+    desc: "Run linter"
+    cmds:
+      - echo "Running linter..."
+      - npx eslint src/ --ext .ts
+
+  format:
+    desc: "Format code"
+    cmds:
+      - echo "Formatting code..."
+      - npx prettier --write src/
+
+  registry:build:
+    desc: "Build for MCP Registry"
+    cmds:
+      - echo "Building for MCP Registry..."
+      - task: clean
+      - task: build
+      - docker build --platform linux/amd64,linux/arm64 --tag {{.IMAGE_NAME}}:{{.TAG}} --tag {{.IMAGE_NAME}}:latest --tag ghcr.io/brunovlucena/{{.IMAGE_NAME}}:{{.TAG}} --tag ghcr.io/brunovlucena/{{.IMAGE_NAME}}:latest --file Dockerfile .
+      - echo "MCP Registry build completed!"
+
+  registry:push:
+    desc: "Push to MCP Registry"
+    cmds:
+      - echo "Pushing to MCP Registry..."
+      - docker push {{.IMAGE_NAME}}:{{.TAG}}
+      - docker push {{.IMAGE_NAME}}:latest
+      - docker push ghcr.io/brunovlucena/{{.IMAGE_NAME}}:{{.TAG}}
+      - docker push ghcr.io/brunovlucena/{{.IMAGE_NAME}}:latest
+      - echo "Pushed to MCP Registry!"
+
+  registry:deploy:
+    desc: "Deploy to MCP Registry"
+    cmds:
+      - task: registry:build
+      - task: registry:push
+      - echo "Deployed to MCP Registry!"
+
+  up:
+    desc: "Start server (Docker default)"
+    cmds:
+      - task: docker:run
+
+  down:
+    desc: "Stop server"
+    cmds:
+      - task: docker:stop
+
+  restart:
+    desc: "Restart server"
+    cmds:
+      - task: docker:stop
+      - task: docker:run
+
+  default:
+    desc: "Show help (default)"
+    cmds:
+      - task: help

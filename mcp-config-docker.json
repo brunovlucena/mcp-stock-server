@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "stock-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "mcp-stock-server",
+        "-e",
+        "NODE_ENV=production",
+        "-e",
+        "MCP_SERVER_NAME=stock-server",
+        "-e",
+        "MCP_SERVER_VERSION=1.0.0",
+        "-e",
+        "PORT=3000",
+        "-e",
+        "LOG_LEVEL=info",
+        "ghcr.io/brunovlucena/mcp-stock-server:latest"
+      ]
+    }
+  }
+}

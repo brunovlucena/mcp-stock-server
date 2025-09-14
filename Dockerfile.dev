@@ -1,0 +1,39 @@
+# 📈 MCP Stock Server - Dockerfile para Desenvolvimento
+# Imagem otimizada para desenvolvimento com hot reload
+
+FROM node:18-alpine
+
+# Instalar dependências necessárias
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+
+# Instalar todas as dependências (incluindo dev)
+RUN npm install
+
+# Copiar código fonte
+COPY . .
+
+# Compilar TypeScript
+RUN npm run build
+
+# Expor porta
+EXPOSE 3000
+
+# Variáveis de ambiente para desenvolvimento
+ENV NODE_ENV=development
+ENV MCP_SERVER_NAME=stock-server-dev
+ENV MCP_SERVER_VERSION=1.0.0-dev
+ENV PORT=3000
+ENV LOG_LEVEL=debug
+
+# Comando para desenvolvimento com watch
+CMD ["npm", "run", "watch"]
